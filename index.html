@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Verificar documento · ePROF+</title>
+<link rel="icon" href="escudo.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap">
+<style>
+  /* Mismo aspecto que ePROF+ (tarjetas de eProf, celeste institucional). */
+  :root { --celeste: #00bcd4; --celeste2: #00acc1; --texto: #3c4858; --suave: #777; --verde: #2e7d32; --rojo: #c62828; --ambar: #b26a00; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; min-height: 100vh; background: #eee; color: var(--texto); font: 400 15px/1.5 Roboto, Helvetica, Arial, sans-serif; padding: 44px 16px 24px; }
+  .caja { max-width: 620px; margin: 0 auto; }
+  .card { position: relative; background: #fff; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.14); padding: 16px 20px 22px; }
+  .icono { position: absolute; top: -20px; left: 20px; width: 72px; height: 72px; border-radius: 3px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(60deg, #26c6da, var(--celeste2)); box-shadow: 0 4px 20px rgba(0,0,0,.14), 0 7px 10px -5px rgba(0,188,212,.4); }
+  .icono img { height: 52px; display: block; background: #fff; border-radius: 4px; padding: 3px; }
+  h1 { font-size: 19px; font-weight: 400; margin: 0 0 0 86px; min-height: 40px; }
+  h1 small { display: block; font-size: 13px; color: var(--suave); }
+  .estado { display: flex; align-items: center; gap: 10px; margin: 18px 0 14px; padding: 12px 14px; border-radius: 3px; color: #fff; font-weight: 500; }
+  .estado svg { flex: none; width: 24px; height: 24px; fill: currentColor; }
+  .valido { background: var(--verde); } .reemplazado { background: var(--ambar); } .invalido { background: var(--rojo); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 14px; overflow-wrap: anywhere; }
+  th { width: 38%; font-weight: 500; color: var(--suave); }
+  .huella { font: 12px/1.4 Consolas, monospace; }
+  .abrir { margin-top: 20px; padding-top: 14px; border-top: 1px solid #eee; }
+  label { display: block; font-weight: 500; margin-bottom: 4px; }
+  .fila { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  input { flex: 1 1 150px; min-width: 0; font: inherit; font-size: 17px; letter-spacing: 3px; text-transform: uppercase; border: 0; border-bottom: 1px solid #d2d2d2; padding: 8px 2px; outline: 0; }
+  input:focus { border-bottom: 2px solid var(--celeste); }
+  button, .btn { display: inline-block; border: 0; border-radius: 3px; background: var(--celeste); color: #fff; font: 500 13px Roboto, Arial, sans-serif; letter-spacing: .3px; text-transform: uppercase; text-decoration: none; padding: 11px 20px; cursor: pointer; box-shadow: 0 2px 2px rgba(0,188,212,.14), 0 3px 1px -2px rgba(0,188,212,.2), 0 1px 5px rgba(0,188,212,.12); }
+  button:hover, .btn:hover { background: var(--celeste2); }
+  button[disabled] { opacity: .6; cursor: default; }
+  .ayuda { color: var(--suave); font-size: 13px; margin: 8px 0 0; }
+  .error { color: var(--rojo); font-size: 14px; margin: 8px 0 0; }
+  .aviso { color: var(--suave); font-size: 12px; text-align: center; margin: 16px 8px 0; }
+  a { color: var(--celeste2); }
+</style>
+</head>
+<body>
+<div class="caja">
+  <div class="card">
+    <div class="icono"><img src="escudo.png" alt="Facultad de Ciencias Económicas"></div>
+    <h1>Verificación de documento<small>ePROF+ · FCE - UNA</small></h1>
+    <div id="contenido"><p class="ayuda">Verificando…</p></div>
+  </div>
+  <p class="aviso">Firma electrónica simple generada con ePROF+. Comprueba quién firmó y cuándo, y que el documento guardado es el original.</p>
+</div>
+<script>
+(function () {
+  'use strict';
+  // Clave "publishable": es publica por diseno y solo deja usar las funciones epp_*.
+  var URL_BASE = 'https://akngssgdgakhsnruzjhq.supabase.co/rest/v1/rpc/';
+  var CLAVE = 'sb_publishable_6eQPXrR_NeIt_aByjTLWfA_CdNQEtg9';
+  var ICONOS = {
+    bien: '<svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3zm-1.5 15-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4-7 7z"/></svg>',
+    alerta: '<svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>'
+  };
+  var caja = document.getElementById('contenido');
+
+  function esc(t) {
+    return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function rpc(funcion, args) {
+    return fetch(URL_BASE + funcion, {
+      method: 'POST',
+      headers: { apikey: CLAVE, 'Content-Type': 'application/json' },
+      body: JSON.stringify(args)
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  }
+
+  function fecha(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    var dos = function (n) { return (n < 10 ? '0' : '') + n; };
+    return dos(d.getDate()) + '/' + dos(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + dos(d.getHours()) + ':' + dos(d.getMinutes());
+  }
+
+  function estado(clase, icono, texto) {
+    return '<div class="estado ' + clase + '">' + ICONOS[icono] + '<span>' + texto + '</span></div>';
+  }
+
+  function fila(titulo, valor) {
+    return valor === '' || valor == null ? '' : '<tr><th>' + titulo + '</th><td>' + esc(valor) + '</td></tr>';
+  }
+
+  function mostrar(f, id) {
+    var d = f.datos || {};
+    var cabecera = f.reemplazada_en
+      ? estado('reemplazado', 'alerta', 'Documento reemplazado el ' + esc(fecha(f.reemplazada_en)) + '. Ya no es la versión vigente.')
+      : estado('valido', 'bien', 'Documento válido');
+    var turno = [d.turno, d.seccion].filter(Boolean).join(' / ');
+    caja.innerHTML = cabecera +
+      (f.reemplazada_por ? '<p><a href="#' + encodeURIComponent(f.reemplazada_por) + '">Ver el documento vigente</a></p>' : '') +
+      '<table>' +
+      fila('Informe', d.informe) + fila('Firmado por', f.docente) + fila('Fecha de firma', fecha(f.fecha)) +
+      fila('Asignatura', d.asignatura) + fila('Carrera', d.carrera) + fila('Filial', d.filial) +
+      fila('Año / semestre', [d.anho, d.semestre].filter(Boolean).join(' / ')) + fila('Turno / sección', turno) +
+      '<tr><th>Huella digital</th><td class="huella">' + esc(f.huella) + '</td></tr>' +
+      '</table>' +
+      '<div class="abrir"><form id="pedir"><label for="codigo">Ver el documento</label><div class="fila">' +
+      '<input id="codigo" autocomplete="off" autocapitalize="characters" maxlength="6" placeholder="Código" required>' +
+      '<button type="submit">Abrir PDF</button></div>' +
+      '<p class="ayuda">El código de 6 caracteres está impreso en la última hoja, junto al QR.</p>' +
+      '<p class="error" id="error" hidden></p><div id="enlace"></div></form></div>';
+    document.getElementById('pedir').addEventListener('submit', function (e) {
+      e.preventDefault();
+      abrir(id);
+    });
+  }
+
+  function abrir(id) {
+    var boton = document.querySelector('#pedir button');
+    var error = document.getElementById('error');
+    var enlace = document.getElementById('enlace');
+    error.hidden = true;
+    enlace.innerHTML = '';
+    boton.disabled = true;
+    rpc('epp_firma_pdf', { p_id: id, p_codigo: document.getElementById('codigo').value }).then(function (r) {
+      boton.disabled = false;
+      if (r.error) {
+        error.textContent = r.error === 'muchos_intentos'
+          ? 'Demasiados intentos con este documento. Probá de nuevo en una hora.'
+          : 'El código no es correcto.';
+        error.hidden = false;
+        return;
+      }
+      var crudo = atob(r.pdf);
+      var bytes = new Uint8Array(crudo.length);
+      for (var i = 0; i < crudo.length; i++) bytes[i] = crudo.charCodeAt(i);
+      var url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      enlace.innerHTML = '<p class="ayuda">Código correcto.</p><a class="btn" target="_blank" rel="noopener" href="' + url + '">Ver PDF</a> ' +
+        '<a class="btn" download="documento-firmado.pdf" href="' + url + '">Descargar</a>';
+    }, function () {
+      boton.disabled = false;
+      error.textContent = 'No se pudo consultar. Revisá la conexión y volvé a intentar.';
+      error.hidden = false;
+    });
+  }
+
+  function cargar() {
+    var id = decodeURIComponent(location.hash.slice(1));
+    window.scrollTo(0, 0);
+    if (!id) {
+      caja.innerHTML = '<p class="ayuda">Escaneá el código QR del documento para verificarlo.</p>';
+      return;
+    }
+    caja.innerHTML = '<p class="ayuda">Verificando…</p>';
+    rpc('epp_firma_ver', { p_id: id }).then(function (f) {
+      if (!f.encontrado) {
+        caja.innerHTML = estado('invalido', 'alerta', 'Documento no encontrado') +
+          '<p class="ayuda">Este código no corresponde a ningún documento firmado con ePROF+.</p>';
+        return;
+      }
+      mostrar(f, id);
+    }, function () {
+      caja.innerHTML = estado('invalido', 'alerta', 'No se pudo verificar') +
+        '<p class="ayuda">Revisá la conexión y volvé a intentar. Esto no significa que el documento sea falso.</p>';
+    });
+  }
+
+  window.addEventListener('hashchange', cargar);
+  cargar();
+})();
+</script>
+</body>
+</html>
